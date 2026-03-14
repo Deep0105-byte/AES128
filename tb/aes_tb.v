@@ -38,7 +38,11 @@ key=128'h000102030405060708090a0b0c0d0e0f;
 #10 start=1;
 #10 start=0;
 
-#500 $finish;
+#500;
+$display("Plaintext  = %h", plaintext);
+$display("Key        = %h", key);
+$display("Ciphertext = %h", ciphertext);
+ $finish;
 
 end
 
