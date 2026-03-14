@@ -1,13 +1,11 @@
 module key_expansion(
 input  [127:0] key,
 input  [3:0] round,
-output reg [127:0] round_key
+output [127:0] round_key
 );
 
 reg [31:0] w [0:43];
 integer i;
-
-wire [7:0] s0,s1,s2,s3;
 
 function [31:0] rcon;
 input [3:0] r;
@@ -28,6 +26,40 @@ endcase
 end
 endfunction
 
+function [31:0] rotword;
+input [31:0] x;
+begin
+rotword = {x[23:0], x[31:24]};
+end
+endfunction
+
+function [7:0] sbox_lookup;
+input [7:0] x;
+begin
+case(x)
+8'h00: sbox_lookup=8'h63; 8'h01: sbox_lookup=8'h7c;
+8'h02: sbox_lookup=8'h77; 8'h03: sbox_lookup=8'h7b;
+8'h04: sbox_lookup=8'hf2; 8'h05: sbox_lookup=8'h6b;
+8'h06: sbox_lookup=8'h6f; 8'h07: sbox_lookup=8'hc5;
+8'h08: sbox_lookup=8'h30; 8'h09: sbox_lookup=8'h01;
+8'h0a: sbox_lookup=8'h67; 8'h0b: sbox_lookup=8'h2b;
+default: sbox_lookup=8'h00;
+endcase
+end
+endfunction
+
+function [31:0] subword;
+input [31:0] x;
+begin
+subword = {
+sbox_lookup(x[31:24]),
+sbox_lookup(x[23:16]),
+sbox_lookup(x[15:8]),
+sbox_lookup(x[7:0])
+};
+end
+endfunction
+
 always @(*) begin
 
 w[0] = key[127:96];
@@ -37,43 +69,25 @@ w[3] = key[31:0];
 
 for(i=4;i<44;i=i+1)
 begin
-    if(i%4==0)
-    begin
-        w[i] = w[i-4] ^
-               {s0,s1,s2,s3} ^
-               rcon(i/4);
-    end
-    else
-    begin
-        w[i] = w[i-4] ^ w[i-1];
-    end
+if(i%4==0)
+w[i] = w[i-4] ^ subword(rotword(w[i-1])) ^ rcon(i/4);
+else
+w[i] = w[i-4] ^ w[i-1];
 end
 
 end
 
-sbox sb0(w[3][23:16], s0);
-sbox sb1(w[3][15:8],  s1);
-sbox sb2(w[3][7:0],   s2);
-sbox sb3(w[3][31:24], s3);
-
-always @(*) begin
-case(round)
-
-0: round_key = {w[0],w[1],w[2],w[3]};
-1: round_key = {w[4],w[5],w[6],w[7]};
-2: round_key = {w[8],w[9],w[10],w[11]};
-3: round_key = {w[12],w[13],w[14],w[15]};
-4: round_key = {w[16],w[17],w[18],w[19]};
-5: round_key = {w[20],w[21],w[22],w[23]};
-6: round_key = {w[24],w[25],w[26],w[27]};
-7: round_key = {w[28],w[29],w[30],w[31]};
-8: round_key = {w[32],w[33],w[34],w[35]};
-9: round_key = {w[36],w[37],w[38],w[39]};
-10: round_key = {w[40],w[41],w[42],w[43]};
-
-default: round_key = 128'h0;
-
-endcase
-end
+assign round_key =
+(round==0)  ? {w[0],w[1],w[2],w[3]} :
+(round==1)  ? {w[4],w[5],w[6],w[7]} :
+(round==2)  ? {w[8],w[9],w[10],w[11]} :
+(round==3)  ? {w[12],w[13],w[14],w[15]} :
+(round==4)  ? {w[16],w[17],w[18],w[19]} :
+(round==5)  ? {w[20],w[21],w[22],w[23]} :
+(round==6)  ? {w[24],w[25],w[26],w[27]} :
+(round==7)  ? {w[28],w[29],w[30],w[31]} :
+(round==8)  ? {w[32],w[33],w[34],w[35]} :
+(round==9)  ? {w[36],w[37],w[38],w[39]} :
+{w[40],w[41],w[42],w[43]};
 
 endmodule

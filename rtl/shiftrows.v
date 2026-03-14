@@ -3,13 +3,43 @@ input  [127:0] state_in,
 output [127:0] state_out
 );
 
-assign state_out = {
+wire [7:0] s [0:15];
+wire [7:0] r [0:15];
 
-state_in[127:120], state_in[87:80],  state_in[47:40],  state_in[7:0],
-state_in[95:88],   state_in[55:48],  state_in[15:8],   state_in[103:96],
-state_in[63:56],   state_in[23:16],  state_in[111:104], state_in[71:64],
-state_in[31:24],   state_in[119:112],state_in[79:72],   state_in[39:32]
+genvar i;
 
-};
+generate
+for(i=0;i<16;i=i+1)
+assign s[i] = state_in[127 - i*8 -: 8];
+endgenerate
+
+// Row 0
+assign r[0] = s[0];
+assign r[4] = s[4];
+assign r[8] = s[8];
+assign r[12] = s[12];
+
+// Row 1 shift left by 1
+assign r[1] = s[5];
+assign r[5] = s[9];
+assign r[9] = s[13];
+assign r[13] = s[1];
+
+// Row 2 shift left by 2
+assign r[2] = s[10];
+assign r[6] = s[14];
+assign r[10] = s[2];
+assign r[14] = s[6];
+
+// Row 3 shift left by 3
+assign r[3] = s[15];
+assign r[7] = s[3];
+assign r[11] = s[7];
+assign r[15] = s[11];
+
+generate
+for(i=0;i<16;i=i+1)
+assign state_out[127 - i*8 -: 8] = r[i];
+endgenerate
 
 endmodule

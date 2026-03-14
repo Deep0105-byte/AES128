@@ -1,0 +1,7 @@
+Command exited with non-zero status 255
+{"vcs1":{"timestamp_begin":1773527473.780297930, "rt":2.57, "ut":0.12, "st":0.09}}
+{"SNPS_VCS_INTERNAL_ROOT_START_TIME": 1773527473.024463863}
+{"VCS_COMP_START_TIME": 1773527473.024463863}
+{"VCS_COMP_END_TIME": 1773527476.473802010}
+{"VCS_USER_OPTIONS": "-full64 -sverilog rtl/addroundkey.v rtl/aes_controller.v rtl/aes_top.v rtl/key_expansion.v rtl/mixcolumns.v rtl/sbox.v rtl/shiftrows.v rtl/subbytes.v tb/aes_tb.v"}
+{"vcs1": {"peak_mem": 305284}}
