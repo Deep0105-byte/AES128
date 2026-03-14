@@ -1,9 +1,0 @@
-{"vcs1":{"timestamp_begin":1773526648.446980747, "rt":3.20, "ut":0.51, "st":0.17}}
-{"vcselab":{"timestamp_begin":1773526651.790839187, "rt":2.62, "ut":0.44, "st":0.15}}
-{"link":{"timestamp_begin":1773526654.511667242, "rt":0.34, "ut":0.20, "st":0.11}}
-{"SNPS_VCS_INTERNAL_ROOT_START_TIME": 1773526647.730532996}
-{"VCS_COMP_START_TIME": 1773526647.730532996}
-{"VCS_COMP_END_TIME": 1773526654.988005772}
-{"VCS_USER_OPTIONS": "-full64 -sverilog rtl/addroundkey.v rtl/aes_controller.v rtl/aes_top.v rtl/key_expansion.v rtl/mixcolumns.v rtl/sbox.v rtl/shiftrows.v rtl/subbytes.v tb/aes_tb.v"}
-{"vcs1": {"peak_mem": 322444}}
-{"vcselab": {"peak_mem": 195232}}

@@ -1,9 +1,0 @@
-/home/student8/Deepak/AES128_FPGA/AES128/rtl/addroundkey.v
-/home/student8/Deepak/AES128_FPGA/AES128/rtl/aes_controller.v
-/home/student8/Deepak/AES128_FPGA/AES128/rtl/aes_top.v
-/home/student8/Deepak/AES128_FPGA/AES128/rtl/key_expansion.v
-/home/student8/Deepak/AES128_FPGA/AES128/rtl/mixcolumns.v
-/home/student8/Deepak/AES128_FPGA/AES128/rtl/sbox.v
-/home/student8/Deepak/AES128_FPGA/AES128/rtl/shiftrows.v
-/home/student8/Deepak/AES128_FPGA/AES128/rtl/subbytes.v
-/home/student8/Deepak/AES128_FPGA/AES128/tb/aes_tb.v
