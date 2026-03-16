@@ -14,17 +14,14 @@ module aes_controller (
     output reg         key_expand_en
 );
 
-// FSM states
-typedef enum logic [2:0] {
-    IDLE,
-    INIT_ROUND,
-    PROCESS_ROUND,
-    FINAL_ROUND,
-    DONE
-} state_t;
+// FSM state encoding
+localparam IDLE          = 3'd0;
+localparam INIT_ROUND    = 3'd1;
+localparam PROCESS_ROUND = 3'd2;
+localparam FINAL_ROUND   = 3'd3;
+localparam DONE          = 3'd4;
 
-state_t state, next_state;
-
+reg [2:0] state, next_state;
 reg [3:0] round_counter;
 
 always @(posedge clk or negedge rst_n) begin
@@ -37,6 +34,8 @@ always @(posedge clk or negedge rst_n) begin
         // Update round counter
         if (state == IDLE && start) begin
             round_counter <= 4'h0;
+        end else if (state == INIT_ROUND) begin
+            round_counter <= 4'h1;
         end else if (state == PROCESS_ROUND && round_counter < 4'h9) begin
             round_counter <= round_counter + 1'b1;
         end else if (state == PROCESS_ROUND && round_counter == 4'h9) begin
@@ -73,14 +72,15 @@ always @(*) begin
         end
         
         PROCESS_ROUND: begin
+            round_key_sel = 1'b1;  // Use subsequent round keys
+            state_ld_en = 1'b1;
+            
             if (round_counter < 4'h9) begin
                 // Rounds 1-9
-                round_key_sel = 1'b1;
-                state_ld_en = 1'b1;
                 skip_mixcolumns = 1'b0;
-                round_done = (round_counter == 4'h8) ? 1'b1 : 1'b0;
-                next_state = (round_counter == 4'h8) ? FINAL_ROUND : PROCESS_ROUND;
+                next_state = PROCESS_ROUND;
             end else begin
+                // Last round of processing
                 next_state = FINAL_ROUND;
             end
         end
@@ -97,6 +97,10 @@ always @(*) begin
         DONE: begin
             busy = 1'b0;
             round_done = 1'b0;
+            next_state = IDLE;
+        end
+        
+        default: begin
             next_state = IDLE;
         end
     endcase

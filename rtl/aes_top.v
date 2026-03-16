@@ -1,4 +1,4 @@
-/**
+ /**
  * aes_top.v - Top module for AES-128 iterative architecture
  */
 module aes_top (
@@ -35,7 +35,7 @@ wire        key_expand_en;
 reg [127:0] state_reg;
 
 // Round key selection (0 for initial, 1 for rounds 1-10)
-assign selected_round_key = round_key_sel ? round_key[round_count+1] : round_key[0];
+assign selected_round_key = round_key_sel ? round_key[round_count] : round_key[0];
 
 // Datapath connections
 assign state_in = (round_count == 4'h0 && start) ? (plaintext ^ key) : addroundkey_out;

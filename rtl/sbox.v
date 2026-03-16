@@ -1,80 +1,151 @@
 /**
- * sbox.v - AES S-Box lookup table
- * Implementation based on FIPS-197 specification
+ * key_expansion.v - AES-128 Key Expansion
+ * Generates 11 round keys from initial 128-bit key
  */
-module sbox (
-    input  wire [7:0] addr,
-    output reg  [7:0] data
+module key_expansion (
+    input  wire        clk,
+    input  wire        rst_n,
+    input  wire        key_expand_en,
+    input  wire [127:0] cipher_key,
+    output reg  [127:0] round_key [0:10]
 );
 
+// Rcon for AES-128 (10 rounds)
+wire [31:0] rcon [0:10];
+assign rcon[0]  = 32'h00000000;
+assign rcon[1]  = 32'h01000000;
+assign rcon[2]  = 32'h02000000;
+assign rcon[3]  = 32'h04000000;
+assign rcon[4]  = 32'h08000000;
+assign rcon[5]  = 32'h10000000;
+assign rcon[6]  = 32'h20000000;
+assign rcon[7]  = 32'h40000000;
+assign rcon[8]  = 32'h80000000;
+assign rcon[9]  = 32'h1b000000;
+assign rcon[10] = 32'h36000000;
+
+// Internal registers for key expansion
+reg [31:0] w [0:43];  // 44 words for AES-128
+integer i, j;
+
+// S-Box ROM for SubWord
+reg [7:0] sbox_rom [0:255];
+initial begin
+    // Initialize S-Box ROM
+    sbox_rom[8'h00] = 8'h63; sbox_rom[8'h01] = 8'h7c; sbox_rom[8'h02] = 8'h77; sbox_rom[8'h03] = 8'h7b;
+    sbox_rom[8'h04] = 8'hf2; sbox_rom[8'h05] = 8'h6b; sbox_rom[8'h06] = 8'h6f; sbox_rom[8'h07] = 8'hc5;
+    sbox_rom[8'h08] = 8'h30; sbox_rom[8'h09] = 8'h01; sbox_rom[8'h0a] = 8'h67; sbox_rom[8'h0b] = 8'h2b;
+    sbox_rom[8'h0c] = 8'hfe; sbox_rom[8'h0d] = 8'hd7; sbox_rom[8'h0e] = 8'hab; sbox_rom[8'h0f] = 8'h76;
+    sbox_rom[8'h10] = 8'hca; sbox_rom[8'h11] = 8'h82; sbox_rom[8'h12] = 8'hc9; sbox_rom[8'h13] = 8'h7d;
+    sbox_rom[8'h14] = 8'hfa; sbox_rom[8'h15] = 8'h59; sbox_rom[8'h16] = 8'h47; sbox_rom[8'h17] = 8'hf0;
+    sbox_rom[8'h18] = 8'had; sbox_rom[8'h19] = 8'hd4; sbox_rom[8'h1a] = 8'ha2; sbox_rom[8'h1b] = 8'haf;
+    sbox_rom[8'h1c] = 8'h9c; sbox_rom[8'h1d] = 8'ha4; sbox_rom[8'h1e] = 8'h72; sbox_rom[8'h1f] = 8'hc0;
+    sbox_rom[8'h20] = 8'hb7; sbox_rom[8'h21] = 8'hfd; sbox_rom[8'h22] = 8'h93; sbox_rom[8'h23] = 8'h26;
+    sbox_rom[8'h24] = 8'h36; sbox_rom[8'h25] = 8'h3f; sbox_rom[8'h26] = 8'hf7; sbox_rom[8'h27] = 8'hcc;
+    sbox_rom[8'h28] = 8'h34; sbox_rom[8'h29] = 8'ha5; sbox_rom[8'h2a] = 8'he5; sbox_rom[8'h2b] = 8'hf1;
+    sbox_rom[8'h2c] = 8'h71; sbox_rom[8'h2d] = 8'hd8; sbox_rom[8'h2e] = 8'h31; sbox_rom[8'h2f] = 8'h15;
+    sbox_rom[8'h30] = 8'h04; sbox_rom[8'h31] = 8'hc7; sbox_rom[8'h32] = 8'h23; sbox_rom[8'h33] = 8'hc3;
+    sbox_rom[8'h34] = 8'h18; sbox_rom[8'h35] = 8'h96; sbox_rom[8'h36] = 8'h05; sbox_rom[8'h37] = 8'h9a;
+    sbox_rom[8'h38] = 8'h07; sbox_rom[8'h39] = 8'h12; sbox_rom[8'h3a] = 8'h80; sbox_rom[8'h3b] = 8'he2;
+    sbox_rom[8'h3c] = 8'heb; sbox_rom[8'h3d] = 8'h27; sbox_rom[8'h3e] = 8'hb2; sbox_rom[8'h3f] = 8'h75;
+    sbox_rom[8'h40] = 8'h09; sbox_rom[8'h41] = 8'h83; sbox_rom[8'h42] = 8'h2c; sbox_rom[8'h43] = 8'h1a;
+    sbox_rom[8'h44] = 8'h1b; sbox_rom[8'h45] = 8'h6e; sbox_rom[8'h46] = 8'h5a; sbox_rom[8'h47] = 8'ha0;
+    sbox_rom[8'h48] = 8'h52; sbox_rom[8'h49] = 8'h3b; sbox_rom[8'h4a] = 8'hd6; sbox_rom[8'h4b] = 8'hb3;
+    sbox_rom[8'h4c] = 8'h29; sbox_rom[8'h4d] = 8'he3; sbox_rom[8'h4e] = 8'h2f; sbox_rom[8'h4f] = 8'h84;
+    sbox_rom[8'h50] = 8'h53; sbox_rom[8'h51] = 8'hd1; sbox_rom[8'h52] = 8'h00; sbox_rom[8'h53] = 8'hed;
+    sbox_rom[8'h54] = 8'h20; sbox_rom[8'h55] = 8'hfc; sbox_rom[8'h56] = 8'hb1; sbox_rom[8'h57] = 8'h5b;
+    sbox_rom[8'h58] = 8'h6a; sbox_rom[8'h59] = 8'hcb; sbox_rom[8'h5a] = 8'hbe; sbox_rom[8'h5b] = 8'h39;
+    sbox_rom[8'h5c] = 8'h4a; sbox_rom[8'h5d] = 8'h4c; sbox_rom[8'h5e] = 8'h58; sbox_rom[8'h5f] = 8'hcf;
+    sbox_rom[8'h60] = 8'hd0; sbox_rom[8'h61] = 8'hef; sbox_rom[8'h62] = 8'haa; sbox_rom[8'h63] = 8'hfb;
+    sbox_rom[8'h64] = 8'h43; sbox_rom[8'h65] = 8'h4d; sbox_rom[8'h66] = 8'h33; sbox_rom[8'h67] = 8'h85;
+    sbox_rom[8'h68] = 8'h45; sbox_rom[8'h69] = 8'hf9; sbox_rom[8'h6a] = 8'h02; sbox_rom[8'h6b] = 8'h7f;
+    sbox_rom[8'h6c] = 8'h50; sbox_rom[8'h6d] = 8'h3c; sbox_rom[8'h6e] = 8'h9f; sbox_rom[8'h6f] = 8'ha8;
+    sbox_rom[8'h70] = 8'h51; sbox_rom[8'h71] = 8'ha3; sbox_rom[8'h72] = 8'h40; sbox_rom[8'h73] = 8'h8f;
+    sbox_rom[8'h74] = 8'h92; sbox_rom[8'h75] = 8'h9d; sbox_rom[8'h76] = 8'h38; sbox_rom[8'h77] = 8'hf5;
+    sbox_rom[8'h78] = 8'hbc; sbox_rom[8'h79] = 8'hb6; sbox_rom[8'h7a] = 8'hda; sbox_rom[8'h7b] = 8'h21;
+    sbox_rom[8'h7c] = 8'h10; sbox_rom[8'h7d] = 8'hff; sbox_rom[8'h7e] = 8'hf3; sbox_rom[8'h7f] = 8'hd2;
+    sbox_rom[8'h80] = 8'hcd; sbox_rom[8'h81] = 8'h0c; sbox_rom[8'h82] = 8'h13; sbox_rom[8'h83] = 8'hec;
+    sbox_rom[8'h84] = 8'h5f; sbox_rom[8'h85] = 8'h97; sbox_rom[8'h86] = 8'h44; sbox_rom[8'h87] = 8'h17;
+    sbox_rom[8'h88] = 8'hc4; sbox_rom[8'h89] = 8'ha7; sbox_rom[8'h8a] = 8'h7e; sbox_rom[8'h8b] = 8'h3d;
+    sbox_rom[8'h8c] = 8'h64; sbox_rom[8'h8d] = 8'h5d; sbox_rom[8'h8e] = 8'h19; sbox_rom[8'h8f] = 8'h73;
+    sbox_rom[8'h90] = 8'h60; sbox_rom[8'h91] = 8'h81; sbox_rom[8'h92] = 8'h4f; sbox_rom[8'h93] = 8'hdc;
+    sbox_rom[8'h94] = 8'h22; sbox_rom[8'h95] = 8'h2a; sbox_rom[8'h96] = 8'h90; sbox_rom[8'h97] = 8'h88;
+    sbox_rom[8'h98] = 8'h46; sbox_rom[8'h99] = 8'hee; sbox_rom[8'h9a] = 8'hb8; sbox_rom[8'h9b] = 8'h14;
+    sbox_rom[8'h9c] = 8'hde; sbox_rom[8'h9d] = 8'h5e; sbox_rom[8'h9e] = 8'h0b; sbox_rom[8'h9f] = 8'hdb;
+    sbox_rom[8'ha0] = 8'he0; sbox_rom[8'ha1] = 8'h32; sbox_rom[8'ha2] = 8'h3a; sbox_rom[8'ha3] = 8'h0a;
+    sbox_rom[8'ha4] = 8'h49; sbox_rom[8'ha5] = 8'h06; sbox_rom[8'ha6] = 8'h24; sbox_rom[8'ha7] = 8'h5c;
+    sbox_rom[8'ha8] = 8'hc2; sbox_rom[8'ha9] = 8'hd3; sbox_rom[8'haa] = 8'hac; sbox_rom[8'hab] = 8'h62;
+    sbox_rom[8'hac] = 8'h91; sbox_rom[8'had] = 8'h95; sbox_rom[8'hae] = 8'he4; sbox_rom[8'haf] = 8'h79;
+    sbox_rom[8'hb0] = 8'he7; sbox_rom[8'hb1] = 8'hc8; sbox_rom[8'hb2] = 8'h37; sbox_rom[8'hb3] = 8'h6d;
+    sbox_rom[8'hb4] = 8'h8d; sbox_rom[8'hb5] = 8'hd5; sbox_rom[8'hb6] = 8'h4e; sbox_rom[8'hb7] = 8'ha9;
+    sbox_rom[8'hb8] = 8'h6c; sbox_rom[8'hb9] = 8'h56; sbox_rom[8'hba] = 8'hf4; sbox_rom[8'hbb] = 8'hae;
+    sbox_rom[8'hbc] = 8'h65; sbox_rom[8'hbd] = 8'h7a; sbox_rom[8'hbe] = 8'hae; sbox_rom[8'hbf] = 8'h08;
+    sbox_rom[8'hc0] = 8'hba; sbox_rom[8'hc1] = 8'h78; sbox_rom[8'hc2] = 8'h25; sbox_rom[8'hc3] = 8'h2e;
+    sbox_rom[8'hc4] = 8'h1c; sbox_rom[8'hc5] = 8'ha6; sbox_rom[8'hc6] = 8'hb4; sbox_rom[8'hc7] = 8'hc6;
+    sbox_rom[8'hc8] = 8'he8; sbox_rom[8'hc9] = 8'hdd; sbox_rom[8'hca] = 8'h74; sbox_rom[8'hcb] = 8'h1f;
+    sbox_rom[8'hcc] = 8'h4b; sbox_rom[8'hcd] = 8'hbd; sbox_rom[8'hce] = 8'h8b; sbox_rom[8'hcf] = 8'h8a;
+    sbox_rom[8'hd0] = 8'h70; sbox_rom[8'hd1] = 8'h3e; sbox_rom[8'hd2] = 8'hb5; sbox_rom[8'hd3] = 8'h66;
+    sbox_rom[8'hd4] = 8'h48; sbox_rom[8'hd5] = 8'h03; sbox_rom[8'hd6] = 8'hf6; sbox_rom[8'hd7] = 8'h0e;
+    sbox_rom[8'hd8] = 8'h61; sbox_rom[8'hd9] = 8'h35; sbox_rom[8'hda] = 8'h57; sbox_rom[8'hdb] = 8'hb9;
+    sbox_rom[8'hdc] = 8'h86; sbox_rom[8'hdd] = 8'hc1; sbox_rom[8'hde] = 8'h1d; sbox_rom[8'hdf] = 8'h9e;
+    sbox_rom[8'he0] = 8'he1; sbox_rom[8'he1] = 8'hf8; sbox_rom[8'he2] = 8'h98; sbox_rom[8'he3] = 8'h11;
+    sbox_rom[8'he4] = 8'h69; sbox_rom[8'he5] = 8'hd9; sbox_rom[8'he6] = 8'h8e; sbox_rom[8'he7] = 8'h94;
+    sbox_rom[8'he8] = 8'h9b; sbox_rom[8'he9] = 8'h1e; sbox_rom[8'hea] = 8'h87; sbox_rom[8'heb] = 8'he9;
+    sbox_rom[8'hec] = 8'hce; sbox_rom[8'hed] = 8'h55; sbox_rom[8'hee] = 8'h28; sbox_rom[8'hef] = 8'hdf;
+    sbox_rom[8'hf0] = 8'h8c; sbox_rom[8'hf1] = 8'ha1; sbox_rom[8'hf2] = 8'h89; sbox_rom[8'hf3] = 8'h0d;
+    sbox_rom[8'hf4] = 8'hbf; sbox_rom[8'hf5] = 8'he6; sbox_rom[8'hf6] = 8'h42; sbox_rom[8'hf7] = 8'h68;
+    sbox_rom[8'hf8] = 8'h41; sbox_rom[8'hf9] = 8'h99; sbox_rom[8'hfa] = 8'h2d; sbox_rom[8'hfb] = 8'h0f;
+    sbox_rom[8'hfc] = 8'hb0; sbox_rom[8'hfd] = 8'h54; sbox_rom[8'hfe] = 8'hbb; sbox_rom[8'hff] = 8'h16;
+end
+
+// SubWord function using S-Box ROM
+function [31:0] subword;
+    input [31:0] word;
+    reg [7:0] sb_out [0:3];
+    integer j;
+    begin
+        for (j = 0; j < 4; j = j + 1) begin
+            sb_out[j] = sbox_rom[word[8*j +: 8]];
+        end
+        subword = {sb_out[3], sb_out[2], sb_out[1], sb_out[0]};
+    end
+endfunction
+
+// RotWord function
+function [31:0] rotword;
+    input [31:0] word;
+    begin
+        rotword = {word[23:0], word[31:24]};
+    end
+endfunction
+
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        for (i = 0; i < 44; i = i + 1) begin
+            w[i] <= 32'h0;
+        end
+    end else if (key_expand_en) begin
+        // Initialize first 4 words with cipher key
+        w[0] <= cipher_key[127:96];
+        w[1] <= cipher_key[95:64];
+        w[2] <= cipher_key[63:32];
+        w[3] <= cipher_key[31:0];
+        
+        // Generate remaining words
+        for (i = 4; i < 44; i = i + 4) begin
+            w[i]   <= w[i-4] ^ subword(rotword(w[i-1])) ^ rcon[i/4];
+            w[i+1] <= w[i-3] ^ w[i];
+            w[i+2] <= w[i-2] ^ w[i+1];
+            w[i+3] <= w[i-1] ^ w[i+2];
+        end
+    end
+end
+
+// Assign round keys (each 4 words)
 always @(*) begin
-    case(addr)
-        8'h00: data = 8'h63; 8'h01: data = 8'h7c; 8'h02: data = 8'h77; 8'h03: data = 8'h7b;
-        8'h04: data = 8'hf2; 8'h05: data = 8'h6b; 8'h06: data = 8'h6f; 8'h07: data = 8'hc5;
-        8'h08: data = 8'h30; 8'h09: data = 8'h01; 8'h0a: data = 8'h67; 8'h0b: data = 8'h2b;
-        8'h0c: data = 8'hfe; 8'h0d: data = 8'hd7; 8'h0e: data = 8'hab; 8'h0f: data = 8'h76;
-        8'h10: data = 8'hca; 8'h11: data = 8'h82; 8'h12: data = 8'hc9; 8'h13: data = 8'h7d;
-        8'h14: data = 8'hfa; 8'h15: data = 8'h59; 8'h16: data = 8'h47; 8'h17: data = 8'hf0;
-        8'h18: data = 8'had; 8'h19: data = 8'hd4; 8'h1a: data = 8'ha2; 8'h1b: data = 8'haf;
-        8'h1c: data = 8'h9c; 8'h1d: data = 8'ha4; 8'h1e: data = 8'h72; 8'h1f: data = 8'hc0;
-        8'h20: data = 8'hb7; 8'h21: data = 8'hfd; 8'h22: data = 8'h93; 8'h23: data = 8'h26;
-        8'h24: data = 8'h36; 8'h25: data = 8'h3f; 8'h26: data = 8'hf7; 8'h27: data = 8'hcc;
-        8'h28: data = 8'h34; 8'h29: data = 8'ha5; 8'h2a: data = 8'he5; 8'h2b: data = 8'hf1;
-        8'h2c: data = 8'h71; 8'h2d: data = 8'hd8; 8'h2e: data = 8'h31; 8'h2f: data = 8'h15;
-        8'h30: data = 8'h04; 8'h31: data = 8'hc7; 8'h32: data = 8'h23; 8'h33: data = 8'hc3;
-        8'h34: data = 8'h18; 8'h35: data = 8'h96; 8'h36: data = 8'h05; 8'h37: data = 8'h9a;
-        8'h38: data = 8'h07; 8'h39: data = 8'h12; 8'h3a: data = 8'h80; 8'h3b: data = 8'he2;
-        8'h3c: data = 8'heb; 8'h3d: data = 8'h27; 8'h3e: data = 8'hb2; 8'h3f: data = 8'h75;
-        8'h40: data = 8'h09; 8'h41: data = 8'h83; 8'h42: data = 8'h2c; 8'h43: data = 8'h1a;
-        8'h44: data = 8'h1b; 8'h45: data = 8'h6e; 8'h46: data = 8'h5a; 8'h47: data = 8'ha0;
-        8'h48: data = 8'h52; 8'h49: data = 8'h3b; 8'h4a: data = 8'hd6; 8'h4b: data = 8'hb3;
-        8'h4c: data = 8'h29; 8'h4d: data = 8'he3; 8'h4e: data = 8'h2f; 8'h4f: data = 8'h84;
-        8'h50: data = 8'h53; 8'h51: data = 8'hd1; 8'h52: data = 8'h00; 8'h53: data = 8'hed;
-        8'h54: data = 8'h20; 8'h55: data = 8'hfc; 8'h56: data = 8'hb1; 8'h57: data = 8'h5b;
-        8'h58: data = 8'h6a; 8'h59: data = 8'hcb; 8'h5a: data = 8'hbe; 8'h5b: data = 8'h39;
-        8'h5c: data = 8'h4a; 8'h5d: data = 8'h4c; 8'h5e: data = 8'h58; 8'h5f: data = 8'hcf;
-        8'h60: data = 8'hd0; 8'h61: data = 8'hef; 8'h62: data = 8'haa; 8'h63: data = 8'hfb;
-        8'h64: data = 8'h43; 8'h65: data = 8'h4d; 8'h66: data = 8'h33; 8'h67: data = 8'h85;
-        8'h68: data = 8'h45; 8'h69: data = 8'hf9; 8'h6a: data = 8'h02; 8'h6b: data = 8'h7f;
-        8'h6c: data = 8'h50; 8'h6d: data = 8'h3c; 8'h6e: data = 8'h9f; 8'h6f: data = 8'ha8;
-        8'h70: data = 8'h51; 8'h71: data = 8'ha3; 8'h72: data = 8'h40; 8'h73: data = 8'h8f;
-        8'h74: data = 8'h92; 8'h75: data = 8'h9d; 8'h76: data = 8'h38; 8'h77: data = 8'hf5;
-        8'h78: data = 8'hbc; 8'h79: data = 8'hb6; 8'h7a: data = 8'hda; 8'h7b: data = 8'h21;
-        8'h7c: data = 8'h10; 8'h7d: data = 8'hff; 8'h7e: data = 8'hf3; 8'h7f: data = 8'hd2;
-        8'h80: data = 8'hcd; 8'h81: data = 8'h0c; 8'h82: data = 8'h13; 8'h83: data = 8'hec;
-        8'h84: data = 8'h5f; 8'h85: data = 8'h97; 8'h86: data = 8'h44; 8'h87: data = 8'h17;
-        8'h88: data = 8'hc4; 8'h89: data = 8'ha7; 8'h8a: data = 8'h7e; 8'h8b: data = 8'h3d;
-        8'h8c: data = 8'h64; 8'h8d: data = 8'h5d; 8'h8e: data = 8'h19; 8'h8f: data = 8'h73;
-        8'h90: data = 8'h60; 8'h91: data = 8'h81; 8'h92: data = 8'h4f; 8'h93: data = 8'hdc;
-        8'h94: data = 8'h22; 8'h95: data = 8'h2a; 8'h96: data = 8'h90; 8'h97: data = 8'h88;
-        8'h98: data = 8'h46; 8'h99: data = 8'hee; 8'h9a: data = 8'hb8; 8'h9b: data = 8'h14;
-        8'h9c: data = 8'hde; 8'h9d: data = 8'h5e; 8'h9e: data = 8'h0b; 8'h9f: data = 8'hdb;
-        8'ha0: data = 8'he0; 8'ha1: data = 8'h32; 8'ha2: data = 8'h3a; 8'ha3: data = 8'h0a;
-        8'ha4: data = 8'h49; 8'ha5: data = 8'h06; 8'ha6: data = 8'h24; 8'ha7: data = 8'h5c;
-        8'ha8: data = 8'hc2; 8'ha9: data = 8'hd3; 8'haa: data = 8'hac; 8'hab: data = 8'h62;
-        8'hac: data = 8'h91; 8'had: data = 8'h95; 8'hae: data = 8'he4; 8'haf: data = 8'h79;
-        8'hb0: data = 8'he7; 8'hb1: data = 8'hc8; 8'hb2: data = 8'h37; 8'hb3: data = 8'h6d;
-        8'hb4: data = 8'h8d; 8'hb5: data = 8'hd5; 8'hb6: data = 8'h4e; 8'hb7: data = 8'ha9;
-        8'hb8: data = 8'h6c; 8'hb9: data = 8'h56; 8'hba: data = 8'hf4; 8'hbb: data = 8'hae;
-        8'hbc: data = 8'h65; 8'hbd: data = 8'h7a; 8'hbe: data = 8'hae; 8'hbf: data = 8'h08;
-        8'hc0: data = 8'hba; 8'hc1: data = 8'h78; 8'hc2: data = 8'h25; 8'hc3: data = 8'h2e;
-        8'hc4: data = 8'h1c; 8'hc5: data = 8'ha6; 8'hc6: data = 8'hb4; 8'hc7: data = 8'hc6;
-        8'hc8: data = 8'he8; 8'hc9: data = 8'hdd; 8'hca: data = 8'h74; 8'hcb: data = 8'h1f;
-        8'hcc: data = 8'h4b; 8'hcd: data = 8'hbd; 8'hce: data = 8'h8b; 8'hcf: data = 8'h8a;
-        8'hd0: data = 8'h70; 8'hd1: data = 8'h3e; 8'hd2: data = 8'hb5; 8'hd3: data = 8'h66;
-        8'hd4: data = 8'h48; 8'hd5: data = 8'h03; 8'hd6: data = 8'hf6; 8'hd7: data = 8'h0e;
-        8'hd8: data = 8'h61; 8'hd9: data = 8'h35; 8'hda: data = 8'h57; 8'hdb: data = 8'hb9;
-        8'hdc: data = 8'h86; 8'hdd: data = 8'hc1; 8'hde: data = 8'h1d; 8'hdf: data = 8'h9e;
-        8'he0: data = 8'he1; 8'he1: data = 8'hf8; 8'he2: data = 8'h98; 8'he3: data = 8'h11;
-        8'he4: data = 8'h69; 8'he5: data = 8'hd9; 8'he6: data = 8'h8e; 8'he7: data = 8'h94;
-        8'he8: data = 8'h9b; 8'he9: data = 8'h1e; 8'hea: data = 8'h87; 8'heb: data = 8'he9;
-        8'hec: data = 8'hce; 8'hed: data = 8'h55; 8'hee: data = 8'h28; 8'hef: data = 8'hdf;
-        8'hf0: data = 8'h8c; 8'hf1: data = 8'ha1; 8'hf2: data = 8'h89; 8'hf3: data = 8'h0d;
-        8'hf4: data = 8'hbf; 8'hf5: data = 8'he6; 8'hf6: data = 8'h42; 8'hf7: data = 8'h68;
-        8'hf8: data = 8'h41; 8'hf9: data = 8'h99; 8'hfa: data = 8'h2d; 8'hfb: data = 8'h0f;
-        8'hfc: data = 8'hb0; 8'hfd: data = 8'h54; 8'hfe: data = 8'hbb; 8'hff: data = 8'h16;
-        default: data = 8'h00;
-    endcase
+    for (i = 0; i <= 10; i = i + 1) begin
+        round_key[i] = {w[4*i], w[4*i+1], w[4*i+2], w[4*i+3]};
+    end
 end
 
 endmodule
