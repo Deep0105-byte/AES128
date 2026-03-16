@@ -1,74 +1,44 @@
-timescale 1ns/1ps
-// AES Controller FSM
-// States: IDLE -> INIT -> ROUND (x10) -> DONE
 module aes_controller (
-    input        clk,
-    input        rst_n,
-    input        start,
-    output reg   done,
-    output reg [3:0] round_num,   // 0-10
-    output reg   state_we,        // write-enable for state register
-    output reg   is_final_round,  // suppress MixColumns when asserted
-    output reg   load_init        // load plaintext XOR key[0]
+    input clk, rst, start,
+    output reg [3:0] round,
+    output reg busy, done,
+    output reg load_init, load_round
 );
-    localparam IDLE  = 2'd0,
-               INIT  = 2'd1,
-               ROUND = 2'd2,
-               DONE  = 2'd3;
+    parameter IDLE = 2'b00, INIT = 2'b01, WORK = 2'b10, DONE = 2'b11;
+    reg [1:0] state;
 
-    reg [1:0] cs, ns;
-
-    // State register
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) cs <= IDLE;
-        else        cs <= ns;
-    end
-
-    // Next-state logic
-    always @(*) begin
-        ns = cs;
-        case (cs)
-            IDLE:  if (start) ns = INIT;
-            INIT:  ns = ROUND;
-            ROUND: ns = (round_num == 4'd10) ? DONE : ROUND;
-            DONE:  ns = IDLE;
-        endcase
-    end
-
-    // Output logic
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            done          <= 1'b0;
-            round_num     <= 4'd0;
-            state_we      <= 1'b0;
-            is_final_round<= 1'b0;
-            load_init     <= 1'b0;
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            state <= IDLE;
+            round <= 0;
+            busy <= 0;
+            done <= 0;
         end else begin
-            done          <= 1'b0;
-            state_we      <= 1'b0;
-            load_init     <= 1'b0;
-            is_final_round<= 1'b0;
-
-            case (cs)
+            case (state)
                 IDLE: begin
-                    round_num <= 4'd0;
+                    done <= 0;
+                    if (start) begin
+                        state <= INIT;
+                        busy <= 1;
+                    end
                 end
-
                 INIT: begin
-                    load_init  <= 1'b1;
-                    state_we   <= 1'b1;
-                    round_num  <= 4'd1;
+                    load_init <= 1;
+                    round <= 0;
+                    state <= WORK;
                 end
-
-                ROUND: begin
-                    is_final_round <= (round_num == 4'd10);
-                    state_we       <= 1'b1;
-                    if (round_num < 4'd10)
-                        round_num <= round_num + 4'd1;
+                WORK: begin
+                    load_init <= 0;
+                    if (round == 10) begin
+                        state <= DONE;
+                    end else begin
+                        round <= round + 1;
+                    end
                 end
-
                 DONE: begin
-                    done <= 1'b1;
+                    busy <= 0;
+                    done <= 1;
+                    state <= IDLE;
                 end
             endcase
         end
