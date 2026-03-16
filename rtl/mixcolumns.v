@@ -1,66 +1,48 @@
-module mixcolumns(
-input  [127:0] state_in,
-output [127:0] state_out
+`timescale 1ns/1ps
+// MixColumns: GF(2^8) matrix multiply per AES FIPS-197 Section 5.1.3
+// Operates column by column on the 128-bit state (column-major)
+module mixcolumns (
+    input  [127:0] state_in,
+    output [127:0] state_out
 );
+    // GF(2^8) multiply by 2 (xtime)
+    function [7:0] xtime;
+        input [7:0] b;
+        begin
+            xtime = (b[7]) ? ((b << 1) ^ 8'h1b) : (b << 1);
+        end
+    endfunction
 
-function [7:0] xtime;
-input [7:0] x;
-begin
-xtime = (x<<1) ^ ((x[7]) ? 8'h1b : 8'h00);
-end
-endfunction
+    // GF multiply by 3 = xtime(b) XOR b
+    function [7:0] mul3;
+        input [7:0] b;
+        begin
+            mul3 = xtime(b) ^ b;
+        end
+    endfunction
 
-function [7:0] mul2;
-input [7:0] x;
-begin
-mul2 = xtime(x);
-end
-endfunction
+    // MixColumns on one column [s0,s1,s2,s3]:
+    // r0 = 2*s0 ^ 3*s1 ^   s2 ^   s3
+    // r1 =   s0 ^ 2*s1 ^ 3*s2 ^   s3
+    // r2 =   s0 ^   s1 ^ 2*s2 ^ 3*s3
+    // r3 = 3*s0 ^   s1 ^   s2 ^ 2*s3
+    function [31:0] mix_col;
+        input [31:0] col; // {s0,s1,s2,s3}
+        reg [7:0] s0,s1,s2,s3;
+        begin
+            s0 = col[31:24];
+            s1 = col[23:16];
+            s2 = col[15:8];
+            s3 = col[7:0];
+            mix_col[31:24] = xtime(s0) ^ mul3(s1) ^      s2  ^      s3;
+            mix_col[23:16] =      s0   ^ xtime(s1) ^ mul3(s2) ^      s3;
+            mix_col[15:8]  =      s0   ^      s1   ^ xtime(s2) ^ mul3(s3);
+            mix_col[7:0]   = mul3(s0)  ^      s1   ^      s2   ^ xtime(s3);
+        end
+    endfunction
 
-function [7:0] mul3;
-input [7:0] x;
-begin
-mul3 = xtime(x) ^ x;
-end
-endfunction
-
-wire [7:0] s [0:15];
-wire [7:0] r [0:15];
-
-genvar i;
-
-generate
-for(i=0;i<16;i=i+1)
-assign s[i] = state_in[127 - i*8 -: 8];
-endgenerate
-
-/* column 0 */
-assign r[0] = mul2(s[0]) ^ mul3(s[1]) ^ s[2] ^ s[3];
-assign r[1] = s[0] ^ mul2(s[1]) ^ mul3(s[2]) ^ s[3];
-assign r[2] = s[0] ^ s[1] ^ mul2(s[2]) ^ mul3(s[3]);
-assign r[3] = mul3(s[0]) ^ s[1] ^ s[2] ^ mul2(s[3]);
-
-/* column 1 */
-assign r[4] = mul2(s[4]) ^ mul3(s[5]) ^ s[6] ^ s[7];
-assign r[5] = s[4] ^ mul2(s[5]) ^ mul3(s[6]) ^ s[7];
-assign r[6] = s[4] ^ s[5] ^ mul2(s[6]) ^ mul3(s[7]);
-assign r[7] = mul3(s[4]) ^ s[5] ^ s[6] ^ mul2(s[7]);
-
-/* column 2 */
-assign r[8]  = mul2(s[8]) ^ mul3(s[9]) ^ s[10] ^ s[11];
-assign r[9]  = s[8] ^ mul2(s[9]) ^ mul3(s[10]) ^ s[11];
-assign r[10] = s[8] ^ s[9] ^ mul2(s[10]) ^ mul3(s[11]);
-assign r[11] = mul3(s[8]) ^ s[9] ^ s[10] ^ mul2(s[11]);
-
-/* column 3 */
-assign r[12] = mul2(s[12]) ^ mul3(s[13]) ^ s[14] ^ s[15];
-assign r[13] = s[12] ^ mul2(s[13]) ^ mul3(s[14]) ^ s[15];
-assign r[14] = s[12] ^ s[13] ^ mul2(s[14]) ^ mul3(s[15]);
-assign r[15] = mul3(s[12]) ^ s[13] ^ s[14] ^ mul2(s[15]);
-
-generate
-for(i=0;i<16;i=i+1)
-assign state_out[127 - i*8 -: 8] = r[i];
-endgenerate
-
+    assign state_out[127:96] = mix_col(state_in[127:96]);
+    assign state_out[95:64]  = mix_col(state_in[95:64]);
+    assign state_out[63:32]  = mix_col(state_in[63:32]);
+    assign state_out[31:0]   = mix_col(state_in[31:0]);
 endmodule

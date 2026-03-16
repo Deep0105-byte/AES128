@@ -1,85 +1,76 @@
-module aes_controller(
-    input clk,
-    input reset,
-    input start,
-
-    output reg [3:0] round,
-    output reg mix_en,
-    output reg load_init,
-    output reg state_en,
-    output reg done
+timescale 1ns/1ps
+// AES Controller FSM
+// States: IDLE -> INIT -> ROUND (x10) -> DONE
+module aes_controller (
+    input        clk,
+    input        rst_n,
+    input        start,
+    output reg   done,
+    output reg [3:0] round_num,   // 0-10
+    output reg   state_we,        // write-enable for state register
+    output reg   is_final_round,  // suppress MixColumns when asserted
+    output reg   load_init        // load plaintext XOR key[0]
 );
+    localparam IDLE  = 2'd0,
+               INIT  = 2'd1,
+               ROUND = 2'd2,
+               DONE  = 2'd3;
 
-reg [2:0] state;
+    reg [1:0] cs, ns;
 
-parameter IDLE=0, INIT=1, ROUND=2, FINAL=3, DONE=4;
-
-always @(posedge clk or posedge reset)
-begin
-    if(reset)
-    begin
-        state <= IDLE;
-        round <= 0;
+    // State register
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) cs <= IDLE;
+        else        cs <= ns;
     end
-    else
-    begin
-        case(state)
 
-        IDLE:
-        if(start) state <= INIT;
-
-        INIT:
-        begin
-            round <= 1;
-            state <= ROUND;
-        end
-
-        ROUND:
-        begin
-            if(round==9)
-                state <= FINAL;
-            else
-                round <= round + 1;
-        end
-
-        FINAL:
-        begin
-            round <= 10;
-            state <= DONE;
-        end
-
-        DONE:
-            state <= IDLE;
-
+    // Next-state logic
+    always @(*) begin
+        ns = cs;
+        case (cs)
+            IDLE:  if (start) ns = INIT;
+            INIT:  ns = ROUND;
+            ROUND: ns = (round_num == 4'd10) ? DONE : ROUND;
+            DONE:  ns = IDLE;
         endcase
     end
-end
 
-always @(*)
-begin
-    load_init = 0;
-    state_en = 0;
-    mix_en = 1;
-    done = 0;
+    // Output logic
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            done          <= 1'b0;
+            round_num     <= 4'd0;
+            state_we      <= 1'b0;
+            is_final_round<= 1'b0;
+            load_init     <= 1'b0;
+        end else begin
+            done          <= 1'b0;
+            state_we      <= 1'b0;
+            load_init     <= 1'b0;
+            is_final_round<= 1'b0;
 
-    case(state)
+            case (cs)
+                IDLE: begin
+                    round_num <= 4'd0;
+                end
 
-    INIT:
-        load_init = 1;
+                INIT: begin
+                    load_init  <= 1'b1;
+                    state_we   <= 1'b1;
+                    round_num  <= 4'd1;
+                end
 
-    ROUND:
-        state_en = 1;
+                ROUND: begin
+                    is_final_round <= (round_num == 4'd10);
+                    state_we       <= 1'b1;
+                    if (round_num < 4'd10)
+                        round_num <= round_num + 4'd1;
+                end
 
-    FINAL:
-    begin
-        state_en = 1;
-        mix_en = 0;
+                DONE: begin
+                    done <= 1'b1;
+                end
+            endcase
+        end
     end
-
-    DONE:
-        done = 1;
-
-    endcase
-end
-
 endmodule
