@@ -1,4 +1,4 @@
- /**
+/**
  * aes_top.v - Top module for AES-128 iterative architecture
  */
 module aes_top (
