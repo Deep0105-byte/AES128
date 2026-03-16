@@ -32,27 +32,15 @@ always @(posedge clk or negedge rst_n) begin
         state <= next_state;
         
         // Update round counter
-        case (state)
-            IDLE: begin
-                if (start) round_counter <= 4'h0;
-            end
-            
-            INIT_ROUND: begin
-                round_counter <= 4'h1;
-            end
-            
-            PROCESS_ROUND: begin
-                if (round_counter < 4'h9) begin
-                    round_counter <= round_counter + 1'b1;
-                end else if (round_counter == 4'h9) begin
-                    round_counter <= 4'hA;
-                end
-            end
-            
-            FINAL_ROUND: begin
-                round_counter <= 4'hA;
-            end
-        endcase
+        if (state == IDLE && start) begin
+            round_counter <= 4'h0;
+        end else if (state == INIT_ROUND) begin
+            round_counter <= 4'h1;
+        end else if (state == PROCESS_ROUND && round_counter < 4'h9) begin
+            round_counter <= round_counter + 1'b1;
+        end else if (state == PROCESS_ROUND && round_counter == 4'h9) begin
+            round_counter <= 4'hA;
+        end
     end
 end
 
@@ -77,7 +65,7 @@ always @(*) begin
         end
         
         INIT_ROUND: begin
-            // Initial AddRoundKey (Round 0)
+            // Initial AddRoundKey
             round_key_sel = 1'b0;  // Use round_key[0]
             state_ld_en = 1'b1;
             next_state = PROCESS_ROUND;
@@ -91,11 +79,8 @@ always @(*) begin
                 // Rounds 1-9
                 skip_mixcolumns = 1'b0;
                 next_state = PROCESS_ROUND;
-            end else if (round_counter == 4'h9) begin
-                // Last normal round, next is final round
-                skip_mixcolumns = 1'b0;
-                next_state = FINAL_ROUND;
             end else begin
+                // Last round of processing
                 next_state = FINAL_ROUND;
             end
         end

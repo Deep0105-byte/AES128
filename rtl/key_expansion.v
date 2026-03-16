@@ -31,7 +31,7 @@ integer i, j;
 // S-Box ROM for SubWord
 reg [7:0] sbox_rom [0:255];
 initial begin
-    // Initialize S-Box ROM (same as before)
+    // Initialize S-Box ROM
     sbox_rom[8'h00] = 8'h63; sbox_rom[8'h01] = 8'h7c; sbox_rom[8'h02] = 8'h77; sbox_rom[8'h03] = 8'h7b;
     sbox_rom[8'h04] = 8'hf2; sbox_rom[8'h05] = 8'h6b; sbox_rom[8'h06] = 8'h6f; sbox_rom[8'h07] = 8'hc5;
     sbox_rom[8'h08] = 8'h30; sbox_rom[8'h09] = 8'h01; sbox_rom[8'h0a] = 8'h67; sbox_rom[8'h0b] = 8'h2b;
@@ -119,7 +119,6 @@ function [31:0] rotword;
     end
 endfunction
 
-// Key expansion process
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         for (i = 0; i < 44; i = i + 1) begin
@@ -142,7 +141,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-// Assign round keys (each 4 words) - Note: round_key[0] is the original key
+// Assign round keys (each 4 words)
 always @(*) begin
     for (i = 0; i <= 10; i = i + 1) begin
         round_key[i] = {w[4*i], w[4*i+1], w[4*i+2], w[4*i+3]};
