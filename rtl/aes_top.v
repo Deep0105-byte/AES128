@@ -15,7 +15,6 @@ module aes_top (
 // Internal signals
 wire [127:0] round_key [0:10];
 wire [127:0] state_in;
-wire [127:0] state_out;
 wire [127:0] subbytes_out;
 wire [127:0] shiftrows_out;
 wire [127:0] mixcolumns_out;
@@ -34,11 +33,11 @@ wire        key_expand_en;
 // State register
 reg [127:0] state_reg;
 
-// Round key selection (0 for initial, 1 for rounds 1-10)
+// Round key selection
 assign selected_round_key = round_key_sel ? round_key[round_count] : round_key[0];
 
 // Datapath connections
-assign state_in = (round_count == 4'h0 && start) ? (plaintext ^ key) : addroundkey_out;
+assign state_in = (round_count == 4'h0 && state == IDLE) ? (plaintext ^ key) : addroundkey_out;
 
 // SubBytes
 subbytes u_subbytes (
@@ -95,6 +94,22 @@ always @(posedge clk or negedge rst_n) begin
         state_reg <= 128'h0;
     end else if (state_ld_en) begin
         state_reg <= state_in;
+    end
+end
+
+// Track current state for initial round detection
+reg [2:0] state;
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        state <= 3'b0;
+    end else begin
+        case (state)
+            3'b0: if (start) state <= 3'b1;  // IDLE to INIT
+            3'b1: state <= 3'b2;              // INIT to PROCESS
+            3'b2: if (round_count == 4'hA) state <= 3'b3;  // PROCESS to FINAL
+            3'b3: state <= 3'b4;              // FINAL to DONE
+            3'b4: if (!busy) state <= 3'b0;    // DONE to IDLE
+        endcase
     end
 end
 

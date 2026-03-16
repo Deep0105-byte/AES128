@@ -1,5 +1,5 @@
 /**
- * aes_tb.v - Testbench for AES-128 encryption core
+ * aes_tb.v - Enhanced testbench for AES-128 encryption core
  * Uses NIST FIPS-197 test vector
  */
 module aes_tb;
@@ -16,6 +16,13 @@ wire [3:0]   round_num;
 
 // Expected ciphertext for verification
 parameter [127:0] EXPECTED_CIPHERTEXT = 128'h69c4e0d86a7b0430d8cdb78070b4c55a;
+
+// Known intermediate values for debugging (from NIST specification)
+parameter [127:0] ROUND0 = 128'h00102030405060708090a0b0c0d0e0f0;
+parameter [127:0] ROUND1 = 128'h89d810e8855ace682d1843d8cb128fe4;
+parameter [127:0] ROUND2 = 128'h4915598f55e5d7a0daca94fa1f0a63f7;
+parameter [127:0] ROUND9 = 128'hff87968431b86c51695151d9cbe7a7e6;
+parameter [127:0] ROUND10 = 128'h69c4e0d86a7b0430d8cdb78070b4c55a;
 
 // Clock generation
 initial begin
@@ -43,6 +50,7 @@ initial begin
     $display("========================================");
     $display("Plaintext:  %h", plaintext);
     $display("Key:        %h", key);
+    $display("Round 0 (expected): %h", ROUND0);
     $display("----------------------------------------");
     
     // Start encryption
@@ -56,8 +64,7 @@ initial begin
     
     // Display results
     $display("----------------------------------------");
-    $display("Ciphertext: %h", ciphertext);
-    $display("Round 0:    %h", plaintext ^ key);
+    $display("Final Ciphertext: %h", ciphertext);
     
     // Verification
     if (ciphertext === EXPECTED_CIPHERTEXT) begin
@@ -76,10 +83,23 @@ initial begin
     $finish;
 end
 
-// Monitor round numbers
+// Monitor round numbers and state
 always @(posedge clk) begin
-    if (round_num != 0 && round_num <= 10) begin
-        $display("Round %0d complete", round_num);
+    if (round_num != 0) begin
+        #1;  // Small delay to ensure stable values
+        $display("Round %0d complete: state = %h", round_num, uut.state_reg);
+        
+        // Check against known intermediate values
+        case (round_num)
+            4'd1: if (uut.state_reg !== ROUND1) 
+                    $display("  WARNING: Round 1 mismatch! Expected: %h", ROUND1);
+            4'd2: if (uut.state_reg !== ROUND2) 
+                    $display("  WARNING: Round 2 mismatch! Expected: %h", ROUND2);
+            4'd9: if (uut.state_reg !== ROUND9) 
+                    $display("  WARNING: Round 9 mismatch! Expected: %h", ROUND9);
+            4'd10: if (uut.state_reg !== ROUND10) 
+                    $display("  WARNING: Round 10 mismatch! Expected: %h", ROUND10);
+        endcase
     end
 end
 
