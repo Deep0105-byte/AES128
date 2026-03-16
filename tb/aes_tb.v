@@ -42,7 +42,7 @@ key=128'h000102030405060708090a0b0c0d0e0f;
 $display("Plaintext  = %h", plaintext);
 $display("Key        = %h", key);
 $display("Ciphertext = %h", ciphertext);
-$display("Round = %d", DUT.CTRL.round);
+$display("Round = %d", DUT.round);
  $finish;
 
 end
