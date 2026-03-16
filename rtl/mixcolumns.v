@@ -1,27 +1,55 @@
+/**
+ * mixcolumns.v - AES MixColumns transformation
+ * Implements GF(2^8) multiplication with fixed matrix:
+ * [2 3 1 1] for each column
+ * [1 2 3 1]
+ * [1 1 2 3]
+ * [3 1 1 2]
+ */
 module mixcolumns (
-    input  [127:0] state_in,
-    output [127:0] state_out
+    input  wire [127:0] data_in,
+    output reg  [127:0] data_out
 );
-    function [7:0] gmul2(input [7:0] x);
-        gmul2 = {x[6:0], 1'b0} ^ (x[7] ? 8'h1b : 8'h00);
-    endfunction
 
-    function [7:0] gmul3(input [7:0] x);
-        gmul3 = gmul2(x) ^ x;
-    endfunction
+// GF(2^8) multiplication functions
+function [7:0] xtime;
+    input [7:0] x;
+    begin
+        xtime = {x[6:0], 1'b0} ^ (x[7] ? 8'h1b : 8'h00);
+    end
+endfunction
 
-    genvar i;
-    generate
-        for (i = 0; i < 4; i = i + 1) begin : col_loop
-            wire [7:0] s0 = state_in[i*32 + 0  +: 8];
-            wire [7:0] s1 = state_in[i*32 + 8  +: 8];
-            wire [7:0] s2 = state_in[i*32 + 16 +: 8];
-            wire [7:0] s3 = state_in[i*32 + 24 +: 8];
+function [7:0] mul2;
+    input [7:0] x;
+    begin
+        mul2 = xtime(x);
+    end
+endfunction
 
-            assign state_out[i*32 + 0  +: 8] = gmul2(s0) ^ gmul3(s1) ^ s2 ^ s3;
-            assign state_out[i*32 + 8  +: 8] = s0 ^ gmul2(s1) ^ gmul3(s2) ^ s3;
-            assign state_out[i*32 + 16 +: 8] = s0 ^ s1 ^ gmul2(s2) ^ gmul3(s3);
-            assign state_out[i*32 + 24 +: 8] = gmul3(s0) ^ s1 ^ s2 ^ gmul2(s3);
-        end
-    endgenerate
+function [7:0] mul3;
+    input [7:0] x;
+    begin
+        mul3 = xtime(x) ^ x;
+    end
+endfunction
+
+integer col;
+reg [7:0] a0, a1, a2, a3;
+
+always @(*) begin
+    for (col = 0; col < 4; col = col + 1) begin
+        // Extract column bytes (row3, row2, row1, row0 order)
+        a0 = data_in[32*col + 24 +: 8];  // row0
+        a1 = data_in[32*col + 16 +: 8];  // row1
+        a2 = data_in[32*col + 8  +: 8];  // row2
+        a3 = data_in[32*col + 0  +: 8];  // row3
+        
+        // Compute new column values
+        data_out[32*col + 24 +: 8] = mul2(a0) ^ mul3(a1) ^ a2 ^ a3;        // row0
+        data_out[32*col + 16 +: 8] = a0 ^ mul2(a1) ^ mul3(a2) ^ a3;        // row1
+        data_out[32*col + 8  +: 8] = a0 ^ a1 ^ mul2(a2) ^ mul3(a3);        // row2
+        data_out[32*col + 0  +: 8] = mul3(a0) ^ a1 ^ a2 ^ mul2(a3);        // row3
+    end
+end
+
 endmodule
