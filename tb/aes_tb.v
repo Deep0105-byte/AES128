@@ -98,6 +98,12 @@ module aes_tb;
     initial begin
         #2000;
         $display("TIMEOUT: simulation exceeded 2000 ns");
+        // Add inside aes_tb.v before $finish
+#300;
+$display("FORCE PRINT >> ciphertext = %032h", ciphertext);
+$display("FORCE PRINT >> done       = %b",    done);
+$display("FORCE PRINT >> state      = %032h", dut.state);
+
         $finish;
     end
 endmodule
