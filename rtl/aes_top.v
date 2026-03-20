@@ -1,101 +1,95 @@
-
-
-module aes_128 (
-    input  wire         clk,
-    input  wire         rst,
-    input  wire         start,
-    input  wire [127:0] plaintext,
-    input  wire [127:0] key,
-    input  wire         encrypt,   // 1: encrypt, 0: decrypt
-    output reg  [127:0] ciphertext,
-    output reg         done
+`timescale 1ns/1ps
+// aes_top.v – AES-128 Top Module, Iterative (Rolling) Architecture
+// One round datapath reused across 10 rounds (area-optimized for FPGA)
+// Compliant with NIST FIPS-197 AES-128 specification
+//
+// Port Map:
+//   clk        – clock (rising edge)
+//   rst_n      – active-low asynchronous reset
+//   start      – pulse high for 1 cycle to begin encryption
+//   plaintext  – 128-bit input block
+//   key        – 128-bit cipher key
+//   ciphertext – 128-bit encrypted output (valid when done=1)
+//   done       – 1-cycle pulse when encryption is complete
+module aes_top (
+    input          clk,
+    input          rst_n,
+    input          start,
+    input  [127:0] plaintext,
+    input  [127:0] key,
+    output [127:0] ciphertext,
+    output         done
 );
-    reg  [3:0]   round;
-    reg  [127:0] state;
-    reg          busy;
-
-    // All round keys: 11 x 128 bits = 1408 bits
-    wire [1407:0] round_keys;
-    reg  [127:0]  round_key;
-
-    // Encryption path wires
-    wire [127:0] sub_bytes_out, shift_rows_out, mix_columns_out;
-
-    // Decryption path wires
-    wire [127:0] inv_shift_rows_out;
-    wire [127:0] inv_sub_bytes_out;
-    wire [127:0] after_key;
-    wire [127:0] inv_mix_columns_out;
-
-    // Key Expansion
-    key_expansion key_exp (
-        .key       (key),
-        .round_keys(round_keys)
+    // ── Key Schedule (fully combinational) ───────────────────────
+    wire [1407:0] key_schedule;
+    key_expansion u_kexp (
+        .key          (key),
+        .key_schedule (key_schedule)
     );
 
-    // --- Encryption modules ---
-    sub_bytes    sb  (.in(state),         .out(sub_bytes_out));
-    shift_rows   sr  (.in(sub_bytes_out),  .out(shift_rows_out));
-    mix_columns  mc  (.in(shift_rows_out), .out(mix_columns_out));
+    wire [127:0] rk0 = key_schedule[1407:1280]; // rk[0] always available
 
-    // --- Decryption modules ---
-    InvShiftRows    isr (.state_in(state),           .state_out(inv_shift_rows_out));
-    InvSubstitutionMatrix     isb (.Data(inv_shift_rows_out),     .Data_out(inv_sub_bytes_out));
-    InvMixColumns   imc (.state_in(after_key),        .state_out(inv_mix_columns_out));
+    // ── Controller FSM ────────────────────────────────────────────
+    wire        done_w;
+    wire [3:0]  round_num;
+    wire        state_we;
+    wire        is_final;
+    wire        load_init;
 
-    // Compute after_key = InvSubBytes_out ^ round_key
-    assign after_key = inv_sub_bytes_out ^ round_key;
+    aes_controller u_ctrl (
+        .clk       (clk),
+        .rst_n     (rst_n),
+        .start     (start),
+        .done      (done_w),
+        .round_num (round_num),
+        .state_we  (state_we),
+        .is_final  (is_final),
+        .load_init (load_init)
+    );
 
-    // Round-key selection
-    always @(*) begin
-        if (encrypt) begin
-            // Encryption: round 0 uses key[0], round 1 key[1], ...
-            round_key = round_keys[1407 - round*128 -: 128];
-        end else begin
-            // Decryption: round 1 uses key[10], round 2 key[9], ..., round 10 key[1]
-             round_key = round_keys[1407 - (10 - round)*128 -: 128];
+    // ── State Register ────────────────────────────────────────────
+    reg [127:0] state;
+
+    // ── Current Round Key Mux ─────────────────────────────────────
+    // round_num = 1-10 during ROUND state
+    wire [127:0] rk_curr = key_schedule[1407 - round_num*128 -: 128];
+
+    // ── Combinational Round Datapath ──────────────────────────────
+    wire [127:0] after_sb;
+    wire [127:0] after_sr;
+    wire [127:0] after_mc;
+    wire [127:0] pre_ark;
+    wire [127:0] after_ark;
+
+    subbytes   u_sb  (.state_in(state),    .state_out(after_sb));
+    shiftrows  u_sr  (.state_in(after_sb), .state_out(after_sr));
+    mixcolumns u_mc  (.state_in(after_sr), .state_out(after_mc));
+
+    // Bypass MixColumns in round 10 (final round)
+    assign pre_ark = is_final ? after_sr : after_mc;
+
+    addroundkey u_ark (
+        .state_in  (pre_ark),
+        .round_key (rk_curr),
+        .state_out (after_ark)
+    );
+
+    // Initial AddRoundKey: plaintext XOR rk[0]
+    wire [127:0] init_state = plaintext ^ rk0;
+
+    // ── State Register Update ─────────────────────────────────────
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            state <= 128'b0;
+        else if (state_we) begin
+            if (load_init)
+                state <= init_state;   // Round 0: plaintext XOR rk[0]
+            else
+                state <= after_ark;    // Rounds 1-10
         end
     end
 
-    // Main FSM
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            round      <= 0;
-            state      <= 0;
-            ciphertext <= 0;
-            done       <= 0;
-            busy       <= 0;
-        end else if (start && !busy) begin
-            busy  <= 1;
-            done  <= 0;
-            round <= 1;
-            if (encrypt) begin
-                // Initial AddRoundKey for encryption (use key[0])
-                state <= plaintext ^ round_keys[1407 -: 128];
-            end else begin
-                // Initial AddRoundKey for decryption (use key[10])
-                state <= plaintext ^ round_keys[127:0];
-            end
-        end else if (busy && round < 10) begin
-            if (encrypt) begin
-                // Encryption intermediate round: Sub→Shift→Mix→AddKey
-                state <= mix_columns_out ^ round_key;
-            end else begin
-                // Decryption intermediate round: InvShift→InvSub→AddKey→InvMix
-                state <= inv_mix_columns_out;
-            end
-            round <= round + 1;
-        end else if (busy && round == 10) begin
-            if (encrypt) begin
-                // Encryption final round: Sub→Shift→AddKey 
-                ciphertext <= shift_rows_out ^ round_key;
-            end else begin
-                // Decryption final round: InvShift→InvSub→AddKey 
-                ciphertext <= after_key;
-            end
-            busy  <= 0;
-            done  <= 1;
-            round <= 0;
-        end
-    end
+    assign ciphertext = state;
+    assign done       = done_w;
+
 endmodule

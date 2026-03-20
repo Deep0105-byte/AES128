@@ -1,12 +1,9 @@
-/**
- * addroundkey.v - XOR state with round key
- */
+`timescale 1ns/1ps
+// addroundkey.v – AES AddRoundKey (FIPS-197 Sec 5.1.4)
 module addroundkey (
-    input  wire [127:0] state,
-    input  wire [127:0] round_key,
-    output wire [127:0] state_out
+    input  [127:0] state_in,
+    input  [127:0] round_key,
+    output [127:0] state_out
 );
-
-assign state_out = state ^ round_key;
-
+    assign state_out = state_in ^ round_key;
 endmodule
