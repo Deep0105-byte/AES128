@@ -1,37 +1,48 @@
-/**
- * shiftrows.v - AES ShiftRows transformation
- * Column-major format: state[127:0] = {col0, col1, col2, col3}
- * Each column = {row3, row2, row1, row0}
- */
-module shiftrows (
-    input  wire [127:0] data_in,
-    output reg  [127:0] data_out
+module shift_rows (
+    input  wire [127:0] in,
+    output wire [127:0] out
 );
+    wire [7:0] state [0:15];
 
-always @(*) begin
-    // Row 0: no shift
-    data_out[127:120] = data_in[127:120];  // row0 col3
-    data_out[95:88]   = data_in[95:88];    // row0 col2
-    data_out[63:56]   = data_in[63:56];    // row0 col1
-    data_out[31:24]   = data_in[31:24];    // row0 col0
-    
-    // Row 1: shift left by 1
-    data_out[119:112] = data_in[87:80];    // row1 col3 <- row1 col2
-    data_out[87:80]   = data_in[55:48];    // row1 col2 <- row1 col1
-    data_out[55:48]   = data_in[23:16];    // row1 col1 <- row1 col0
-    data_out[23:16]   = data_in[119:112];  // row1 col0 <- row1 col3
-    
-    // Row 2: shift left by 2
-    data_out[111:104] = data_in[79:72];    // row2 col3 <- row2 col1
-    data_out[79:72]   = data_in[47:40];    // row2 col2 <- row2 col0
-    data_out[47:40]   = data_in[111:104];  // row2 col1 <- row2 col3
-    data_out[15:8]    = data_in[15:8];     // row2 col0 <- row2 col2
-    
-    // Row 3: shift left by 3 (right by 1)
-    data_out[103:96]  = data_in[71:64];    // row3 col3 <- row3 col2
-    data_out[71:64]   = data_in[39:32];    // row3 col2 <- row3 col1
-    data_out[39:32]   = data_in[7:0];      // row3 col1 <- row3 col0
-    data_out[7:0]     = data_in[103:96];   // row3 col0 <- row3 col3
-end
+    // Unpack 128-bit input into bytes
+    assign state[0]  = in[127:120];  // Row 0, Col 0
+    assign state[1]  = in[119:112];
+    assign state[2]  = in[111:104];
+    assign state[3]  = in[103:96];
 
+    assign state[4]  = in[95:88];    // Row 1, Col 0
+    assign state[5]  = in[87:80];
+    assign state[6]  = in[79:72];
+    assign state[7]  = in[71:64];
+
+    assign state[8]  = in[63:56];    // Row 2, Col 0
+    assign state[9]  = in[55:48];
+    assign state[10] = in[47:40];
+    assign state[11] = in[39:32];
+
+    assign state[12] = in[31:24];    // Row 3, Col 0
+    assign state[13] = in[23:16];
+    assign state[14] = in[15:8];
+    assign state[15] = in[7:0];
+
+    // Perform ShiftRows
+    assign out[127:120] = state[0];    // Row 0: no shift
+    assign out[119:112] = state[5];    // Row 1: shift left 1
+    assign out[111:104] = state[10];
+    assign out[103:96]  = state[15];
+
+    assign out[95:88]   = state[4];    // Row 1
+    assign out[87:80]   = state[9];
+    assign out[79:72]   = state[14];
+    assign out[71:64]   = state[3];
+
+    assign out[63:56]   = state[8];    // Row 2: shift left 2
+    assign out[55:48]   = state[13];
+    assign out[47:40]   = state[2];
+    assign out[39:32]   = state[7];
+
+    assign out[31:24]   = state[12];   // Row 3: shift left 3
+    assign out[23:16]   = state[1];
+    assign out[15:8]    = state[6];
+    assign out[7:0]     = state[11];
 endmodule
