@@ -6,13 +6,12 @@ output [127:0] state_out
 wire [7:0] s [0:15];
 wire [7:0] r [0:15];
 
-genvar i;
+/* Correct AES byte mapping (column-major) */
 
-/* Split state into bytes */
-generate
-for(i=0;i<16;i=i+1)
-assign s[i] = state_in[127 - i*8 -: 8];
-endgenerate
+assign {s[0],s[1],s[2],s[3],
+        s[4],s[5],s[6],s[7],
+        s[8],s[9],s[10],s[11],
+        s[12],s[13],s[14],s[15]} = state_in;
 
 /* Apply S-box */
 sbox s0  (s[0],  r[0]);
@@ -33,9 +32,9 @@ sbox s14 (s[14], r[14]);
 sbox s15 (s[15], r[15]);
 
 /* Reassemble */
-generate
-for(i=0;i<16;i=i+1)
-assign state_out[127 - i*8 -: 8] = r[i];
-endgenerate
+assign state_out = {r[0],r[1],r[2],r[3],
+                    r[4],r[5],r[6],r[7],
+                    r[8],r[9],r[10],r[11],
+                    r[12],r[13],r[14],r[15]};
 
 endmodule
