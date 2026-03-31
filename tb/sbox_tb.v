@@ -19,6 +19,10 @@ $display("SBOX(01) = %h", out);
 in = 8'h02; #10;
 $display("SBOX(02) = %h", out);
 
+in = 8'h11; #10; $display("SBOX(11) = %h", out);
+in = 8'h22; #10; $display("SBOX(22) = %h", out);
+in = 8'hff; #10; $display("SBOX(ff) = %h", out);
+
 $finish;
 
 end
