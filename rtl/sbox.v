@@ -86,6 +86,8 @@ case(in)
 8'hf8: out=8'h41; 8'hf9: out=8'h99; 8'hfa: out=8'h2d; 8'hfb: out=8'h0f;
 8'hfc: out=8'hb0; 8'hfd: out=8'h54; 8'hfe: out=8'hbb; 8'hff: out=8'h16;
 
+default: out = 8'h00;
+
 endcase
 end
 
